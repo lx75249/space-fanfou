@@ -152,7 +152,6 @@ for (var i = 0; i < plugins.length; ++i) {
     options: item.options,
     type: item.type,
     earlyload: item.earlyload === true,
-    sync: item.sync === true
   };
   // 同步缓存样式内容
   if (item.css)
@@ -195,10 +194,8 @@ function buildPageCache() {
     var detail = {
       name: name,
       earlyload: item.earlyload,
-      sync: item.sync,
       style: getURL(item.style),
-      script: (item.sync || item.earlyload) ?
-        loadFile(item.script) : getURL(item.script),
+      script: loadFile(item.script),
     };
     if (item.options)
       detail.options = getPluginOptions(name);

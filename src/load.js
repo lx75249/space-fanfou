@@ -7,9 +7,9 @@ var fragment = document.createDocumentFragment();
 
 function insertCode(type, code, name) {
   var id ='sf_' + type + '_' + name;
-  if (name && $i(id)) return;
+  if (name && $i(id)) return $i(id);
   var $code = $c(type);
-  if (code.indexOf('chrome-extension://') === 0) {
+  if (code.startsWith('chrome-extension://')) {
     if (type == 'style') {
       $code = $c('link');
       $code.href = code;
@@ -22,10 +22,11 @@ function insertCode(type, code, name) {
   }
   if (name) $code.id = id;
   $code.className = 'space-fanfou';
-
-  fragment.appendChild($code);
-  apply();
-
+  try {
+    docelem.appendChild($code);
+  } catch (e) {
+    console.error('[Space-Fanfou]', type, name || code, e);
+  }
   return $code;
 }
 
@@ -36,40 +37,6 @@ function insertStyle(style, name) {
 function insertScript(script, name) {
   return insertCode('script', script, name);
 }
-
-var apply = (function() {
-  var timeout;
-  function applyChange() {
-    try {
-      docelem.appendChild(fragment);
-    } catch (e) { }
-  }
-  return function(force_apply) {
-    clearTimeout(timeout);
-    if (force_apply)
-      return applyChange();
-    else
-      timeout = setTimeout(applyChange, 0);
-  }
-})();
-
-var loadScript = (function() {
-  var waiting_list = [];
-  var slice = Array.prototype.slice;
-  var load = SF.fn.throttle(function() {
-    if (! waiting_list.length) return;
-    var $code = insertScript.apply(
-      insertScript, waiting_list.shift());
-    if (! $code || $code.complete || ! $code.src)
-      load();
-    else
-      $code.onload = $code.onerror = load;
-  }, 0);
-  return function() {
-    waiting_list.push(slice.call(arguments, 0));
-    load();
-  }
-})();
 
 function tryEval(script) {
   script = 'try {' + script + '}' +
@@ -97,48 +64,35 @@ port.onMessage.addListener(function(msg) {
     msg = JSON.parse(msg);
 
   if (msg.type == 'init') {
-    var scripts = [];
     insertStyle(msg.common.font, 'font');
     insertStyle(msg.common.style.css, 'common');
-    loadScript(msg.common.namespace, 'namespace');
-    loadScript(msg.common.functions, 'functions');
-    apply(true);
-    scripts.push([msg.common.common, 'common']);
-    var load_plugins = [];
-    for (var i = 0; i < msg.data.length; ++i) {
-      var item = msg.data[i];
-      if (item.style) insertStyle(item.style, item.name);
-      if (item.script) {
-        var plugin = 'SF.pl.' + item.name;
-        var load_code = 'try {';
-        if (item.options) {
-          load_code += plugin + '.update.apply(' + plugin + ', ' +
-            JSON.stringify(item.options) + ');';
-        }
-        load_code += plugin + '.load();';
-        load_code += '} catch(e) { ';
-        load_code += 'console.log("An error occurs while loading ' + plugin + '", e, e.message);';
-        load_code += '}';
-        if (item.earlyload) {
-          eval(item.script);
-          eval(load_code);
-        } else {
-          scripts.push([item.script, 'plugin_' + item.name]);
-          load_plugins.push(load_code);
-        }
-      }
-      if (item.sync || item.earlyload) apply(true);
-    }
-    scripts.push([load_plugins.join('\n')]);
-    load_plugins = void 0;
-    loadScript(msg.common.probe, 'probe');
+    insertScript(msg.common.namespace, 'namespace');
+    insertScript(msg.common.functions, 'functions');
+    insertScript(msg.common.probe, 'probe');
     SF.fn.waitFor(function() {
       return $i('sf_flag_libs_ok');
     }, function() {
-      for (var i = 0; i < scripts.length; ++i)
-        loadScript.apply(null, scripts[i]);
+      insertScript(msg.common.common, 'common');
+      for (var i = 0; i < msg.data.length; ++i) {
+        var item = msg.data[i];
+        if (item.style) insertStyle(item.style, item.name);
+        if (item.script) {
+          var plugin = 'SF.pl.' + item.name;
+          var load_code = plugin + '.load();';
+          if (item.options) {
+            load_code = plugin + '.update.apply(' + plugin + ', ' +
+              JSON.stringify(item.options) + ');' + load_code;
+          }
+          if (item.earlyload) {
+            tryEval(item.script);
+            tryEval(load_code);
+          } else {
+            insertScript(item.script, 'plugin_' + item.name);
+            insertScript(load_code);
+          }
+        }
+      }
       SF.loaded = true;
-      scripts = void 0;
     });
   } else if (msg.type == 'update') {
     for (var i = 0; i < msg.data.length; ++i) {
@@ -169,7 +123,7 @@ port.onMessage.addListener(function(msg) {
               }
               tryEval(plugin + '.load();');
             } else {
-              loadScript(item.script, item.name);
+              insertScript(item.script, item.name);
               if (item.options) {
                 updates.push(
                     plugin + '.update.apply(' + plugin + ',' +
@@ -192,9 +146,9 @@ port.onMessage.addListener(function(msg) {
           break;
       }
       // 对每个插件单独执行可以防止一个更新错误影响后面的更新
-      loadScript(updates.join(''), 'update_' + item.name);
+      insertScript(updates.join(''), 'update_' + item.name);
     }
-    loadScript('jQuery("' +
+    insertScript('jQuery("' +
       '[id^=sf_script_update_]").remove();', 'update_clear');
   }
 });
@@ -269,6 +223,6 @@ function setupGoogleAnalytics() {
     ga('create', 'UA-84490018-1', 'auto');
     ga('send', 'pageview');
   }
-  loadScript('(' + fn.toString() + '());', 'ga');
+  insertScript('(' + fn.toString() + '());', 'ga');
 }
 setupGoogleAnalytics();
