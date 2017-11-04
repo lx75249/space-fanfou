@@ -90,7 +90,7 @@ addEventListener('beforeunload', function() {
   port.onDisconnect.removeListener(unload);
 }, false);
 
-var port = chrome.extension.connect();
+var port = browser.runtime.connect();
 port.onDisconnect.addListener(unload);
 port.onMessage.addListener(function(msg) {
   if (typeof msg == 'string')

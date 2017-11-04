@@ -252,7 +252,7 @@ function checkURL(url) {
 }
 
 // 等待页面连接
-chrome.extension.onConnect.addListener(function(port) {
+browser.runtime.onConnect.addListener(function(port) {
   var tabId = port.sender.tab.id;
   // 将连接添加到广播列表
   var portId = 'port_' + tabId;
